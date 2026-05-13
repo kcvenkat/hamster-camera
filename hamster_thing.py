@@ -103,7 +103,7 @@ def is_smirk(face, w, h):
     return asymmetry >= 7
 
 #camera capture and loop
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 #hamster images
 hamster_images = {
