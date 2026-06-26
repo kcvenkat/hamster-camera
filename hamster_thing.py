@@ -4,6 +4,8 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import urllib.request
 import math
+import os
+import sys
 
 #landmark initialization
 urllib.request.urlretrieve(
@@ -127,6 +129,44 @@ def is_right_middle_finger_downward_slope(hand, w, h):
     return (mid_y - base_y) > 8 and (tip_y - mid_y) > 8
 
 
+def is_thumbs_up(hand, w, h):
+    if len(hand) <= 4:
+        return False
+
+    thumb_joint = hand[2]
+    thumb_mid = hand[3]
+    thumb_tip = hand[4]
+    palm_center = hand[9]
+
+    thumb_joint_y = thumb_joint.y * h
+    thumb_mid_y = thumb_mid.y * h
+    thumb_tip_y = thumb_tip.y * h
+    palm_center_y = palm_center.y * h
+
+    return (
+        thumb_joint_y > thumb_mid_y
+        and thumb_mid_y > thumb_tip_y
+        and thumb_joint_y < palm_center_y
+    )
+
+
+def is_thumb_near_lips(hand, face, w, h, threshold=60):
+    if len(hand) <= 4:
+        return False
+
+    thumb_tip = hand[4]
+    lip_top = face[13]
+    lip_bottom = face[14]
+
+    lip_center_x = (lip_top.x + lip_bottom.x) / 2
+    lip_center_y = (lip_top.y + lip_bottom.y) / 2
+
+    dx = (thumb_tip.x - lip_center_x) * w
+    dy = (thumb_tip.y - lip_center_y) * h
+
+    return math.hypot(dx, dy) < threshold
+
+
 def is_heart(hand_results, w, h, threshold=80):
     if len(hand_results.hand_landmarks) < 2:
         return False
@@ -194,7 +234,30 @@ def is_smirk(face, w, h):
     return asymmetry >= 7
 
 #camera capture and loop
-cap = cv2.VideoCapture(1)
+def open_camera(preferred_index=None):
+    candidates = []
+    if preferred_index is not None:
+        candidates.append(int(preferred_index))
+    candidates.extend([0, 1, 2, 3, 4])
+
+    seen = set()
+    for index in candidates:
+        if index in seen:
+            continue
+        seen.add(index)
+        cap = cv2.VideoCapture(index)
+        if cap.isOpened():
+            return cap
+    return None
+
+
+preferred_camera = None
+if len(sys.argv) > 1:
+    preferred_camera = sys.argv[1]
+
+cap = open_camera(preferred_camera)
+if cap is None:
+    raise RuntimeError("No camera found. Please connect a camera and try again.")
 
 #hamster images
 hamster_images = {
@@ -204,7 +267,11 @@ hamster_images = {
     "scream": cv2.imread('images/scream_hamster.png'),
     "purse": cv2.imread('images/purse_hamster.png'),
     "smirk": cv2.imread('images/smirk_hamster.png'),
-    "heart": cv2.imread('images/heart_hamster.png')
+    "heart": cv2.imread('images/heart_hamster.png'),
+    "smooch": cv2.imread('images/smooch_hamster.png'),
+    "thumb_up": cv2.imread('images/thumbsup_hamster.png'),
+    "thumb_to_lips": cv2.imread('images/drunk_hamster.png'),
+    "drunk": cv2.imread('images/drunk_hamster.png'),
 }
 
 for img in hamster_images.values():
@@ -212,7 +279,10 @@ for img in hamster_images.values():
         raise ValueError("One or more hamster images failed to load.")
 
 while True:
-    ret,frame = cap.read()
+    ret, frame = cap.read()
+    if not ret or frame is None or frame.size == 0:
+        continue
+
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data = rgb)
 
@@ -222,16 +292,17 @@ while True:
     h, w, _ = frame.shape
     h, w, _ = frame.shape
 
+    thumb_to_lips_ok = False
     if not hand_results.hand_landmarks:
         is_heart_ok = False
         purse_hand_ok = False
+        thumbs_up_ok = False
     else:
         purse_hand_ok = any(
             fingers_together(hand, w, h) for hand in hand_results.hand_landmarks
         )
         is_heart_ok = is_heart(hand_results, w, h)
-
-    print(f"is_heart={is_heart_ok}")
+        thumbs_up_ok = any(is_thumbs_up(hand, w, h) for hand in hand_results.hand_landmarks)
 
     for hand in hand_results.hand_landmarks:
         for idx, lm in enumerate(hand):
@@ -249,8 +320,17 @@ while True:
     face_results = face_landmarker.detect(mp_image)
 
     for face in face_results.face_landmarks:
+        if any(is_thumb_near_lips(hand, face, w, h) for hand in hand_results.hand_landmarks):
+            thumb_to_lips_ok = True
+            break
+
+    for face in face_results.face_landmarks:
         if is_heart_ok:
             expression = "heart"
+        elif thumb_to_lips_ok:
+            expression = "thumb_to_lips"
+        elif thumbs_up_ok and not thumb_to_lips_ok:
+            expression = "thumb_up"
         else:
             mouth_open = distance(face[13], face[14], w, h)
             mouth_width = distance(face[61], face[291], w, h)
@@ -273,8 +353,10 @@ while True:
                 expression = "open"
             elif mouth_width > 140:
                 expression = "smile"
-            elif mouth_width <= 110 and purse_hand_ok:
+            elif mouth_width <= 80 and purse_hand_ok:
                 expression = "purse"
+            elif mouth_width <= 80 and not purse_hand_ok:
+                expression = "smooch"
             else:
                 expression = "neutral"
 
