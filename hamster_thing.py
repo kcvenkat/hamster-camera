@@ -7,23 +7,42 @@ import math
 import os
 import sys
 
+
+def get_asset_path(relative_path):
+    """Get an absolute path to a bundled asset or a local development asset."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
+
+
+def ensure_asset(relative_path, download_url=None):
+    asset_path = get_asset_path(relative_path)
+    if not os.path.exists(asset_path) and download_url:
+        os.makedirs(os.path.dirname(asset_path), exist_ok=True)
+        urllib.request.urlretrieve(download_url, asset_path)
+    return asset_path
+
+
 #landmark initialization
-urllib.request.urlretrieve(
-    'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-    'hand_landmarker.task'
+hand_model_path = ensure_asset(
+    'hand_landmarker.task',
+    'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task'
 )
-urllib.request.urlretrieve(
-    'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-    'face_landmarker.task'
+face_model_path = ensure_asset(
+    'face_landmarker.task',
+    'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 )
 
 hand_options = vision.HandLandmarkerOptions(
-    base_options = mp.tasks.BaseOptions(model_asset_path = 'hand_landmarker.task'),
+    base_options = mp.tasks.BaseOptions(model_asset_path = hand_model_path),
     running_mode = vision.RunningMode.IMAGE,
     num_hands = 2
 )
 face_options = vision.FaceLandmarkerOptions(
-    base_options = mp.tasks.BaseOptions(model_asset_path = 'face_landmarker.task'),
+    base_options = mp.tasks.BaseOptions(model_asset_path = face_model_path),
     running_mode = vision.RunningMode.IMAGE
 )
 
@@ -231,7 +250,7 @@ def is_smirk(face, w, h):
 
     asymmetry = abs(left_drop - right_drop)
 
-    return asymmetry >= 7
+    return asymmetry >= 5
 
 #camera capture and loop
 def open_camera(preferred_index=None):
@@ -261,17 +280,17 @@ if cap is None:
 
 #hamster images
 hamster_images = {
-    "open": cv2.imread('images/happy_hamster.png'),
-    "smile": cv2.imread('images/smile_hamster.png'),
-    "neutral": cv2.imread('images/neutral_hamster.png'),
-    "scream": cv2.imread('images/scream_hamster.png'),
-    "purse": cv2.imread('images/purse_hamster.png'),
-    "smirk": cv2.imread('images/smirk_hamster.png'),
-    "heart": cv2.imread('images/heart_hamster.png'),
-    "smooch": cv2.imread('images/smooch_hamster.png'),
-    "thumb_up": cv2.imread('images/thumbsup_hamster.png'),
-    "thumb_to_lips": cv2.imread('images/drunk_hamster.png'),
-    "drunk": cv2.imread('images/drunk_hamster.png'),
+    "open": cv2.imread(get_asset_path(os.path.join('images', 'happy_hamster.png'))),
+    "smile": cv2.imread(get_asset_path(os.path.join('images', 'smile_hamster.png'))),
+    "neutral": cv2.imread(get_asset_path(os.path.join('images', 'neutral_hamster.png'))),
+    "scream": cv2.imread(get_asset_path(os.path.join('images', 'scream_hamster.png'))),
+    "purse": cv2.imread(get_asset_path(os.path.join('images', 'purse_hamster.png'))),
+    "smirk": cv2.imread(get_asset_path(os.path.join('images', 'smirk_hamster.png'))),
+    "heart": cv2.imread(get_asset_path(os.path.join('images', 'heart_hamster.png'))),
+    "smooch": cv2.imread(get_asset_path(os.path.join('images', 'smooch_hamster.png'))),
+    "thumb_up": cv2.imread(get_asset_path(os.path.join('images', 'thumbsup_hamster.png'))),
+    "thumb_to_lips": cv2.imread(get_asset_path(os.path.join('images', 'drunk_hamster.png'))),
+    "drunk": cv2.imread(get_asset_path(os.path.join('images', 'drunk_hamster.png'))),
 }
 
 for img in hamster_images.values():
@@ -351,11 +370,11 @@ while True:
                 expression = "smirk"
             elif left_to_top < left_to_bottom and right_to_top < right_to_bottom and mouth_open > 40:
                 expression = "open"
-            elif mouth_width > 140:
+            elif mouth_width > 120:
                 expression = "smile"
-            elif mouth_width <= 80 and purse_hand_ok:
+            elif mouth_width <= 90 and purse_hand_ok:
                 expression = "purse"
-            elif mouth_width <= 80 and not purse_hand_ok:
+            elif mouth_width <= 90 and not purse_hand_ok:
                 expression = "smooch"
             else:
                 expression = "neutral"
