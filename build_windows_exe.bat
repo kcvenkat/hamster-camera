@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
@@ -13,34 +13,78 @@ if not errorlevel 1 (
 ) else (
     where python >nul 2>nul
     if errorlevel 1 (
-        echo Python 3 was not found. Install Python 3.10+ from https://www.python.org/downloads/windows/ and try again.
+        echo.
+        echo Python 3.10+ was not found.
+        echo Install Python from https://www.python.org/downloads/windows/
+        pause
         exit /b 1
     )
     set "PYTHON_CMD=python"
 )
 
+echo.
+echo ===============================
 echo Creating virtual environment...
+echo ===============================
+
 %PYTHON_CMD% -m venv "%VENV_DIR%"
 
 call "%VENV_DIR%\Scripts\activate.bat"
 
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -r requirements.txt pyinstaller
+echo.
+echo ===============================
+echo Installing dependencies...
+echo ===============================
 
-echo Building Windows executable...
-pyinstaller --noconfirm --onefile --windowed ^
-  --add-data "images;images" ^
-  --add-data "hand_landmarker.task;." ^
-  --add-data "face_landmarker.task;." ^
-  hamster_thing.py
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
+
+echo.
+echo ===============================
+echo Cleaning previous build...
+echo ===============================
+
+if exist build rmdir /s /q build
+if exist dist rmdir /s /q dist
+if exist hamster_thing.spec del /f /q hamster_thing.spec
+
+echo.
+echo ===============================
+echo Building executable...
+echo ===============================
+
+pyinstaller ^
+    --noconfirm ^
+    --clean ^
+    --onefile ^
+    --windowed ^
+    --collect-all mediapipe ^
+    --hidden-import mediapipe.tasks ^
+    --hidden-import mediapipe.tasks.python ^
+    --hidden-import mediapipe.tasks.c ^
+    --add-data "images;images" ^
+    --add-data "hand_landmarker.task;." ^
+    --add-data "face_landmarker.task;." ^
+    hamster_thing.py
+
+echo.
 
 if exist "dist\hamster_thing.exe" (
+    echo ============================================
+    echo Build successful!
     echo.
-    echo Build complete: dist\hamster_thing.exe
+    echo Executable:
+    echo     dist\hamster_thing.exe
+    echo ============================================
 ) else (
-    echo.
-    echo Build failed. Check the output above for details.
+    echo ============================================
+    echo Build FAILED.
+    echo Check the errors above.
+    echo ============================================
+    pause
     exit /b 1
 )
 
+pause
 endlocal
