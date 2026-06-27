@@ -9,7 +9,6 @@ import sys
 
 
 def get_asset_path(relative_path):
-    """Get an absolute path to a bundled asset or a local development asset."""
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -264,8 +263,15 @@ def open_camera(preferred_index=None):
         if index in seen:
             continue
         seen.add(index)
-        cap = cv2.VideoCapture(index)
+        if os.name == "nt":
+            cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(index)
+
         if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+            cap.set(cv2.CAP_PROP_FPS, 30)
             return cap
     return None
 
@@ -277,6 +283,8 @@ if len(sys.argv) > 1:
 cap = open_camera(preferred_camera)
 if cap is None:
     raise RuntimeError("No camera found. Please connect a camera and try again.")
+
+print(f"Camera resolution: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
 
 #hamster images
 hamster_images = {
@@ -309,7 +317,10 @@ while True:
     
 
     h, w, _ = frame.shape
-    h, w, _ = frame.shape
+
+    dot_radius = max(2, int(min(w, h) * 0.006))
+    face_dot_radius = max(2, int(min(w, h) * 0.003))
+    line_width = max(2, int(min(w, h) * 0.003))
 
     thumb_to_lips_ok = False
     if not hand_results.hand_landmarks:
@@ -326,7 +337,7 @@ while True:
     for hand in hand_results.hand_landmarks:
         for idx, lm in enumerate(hand):
             x, y = int(lm.x * w), int(lm.y * h)
-            cv2.circle(frame, (x, y), 8, (0, 0, 255), -1)
+            cv2.circle(frame, (x, y), dot_radius, (0, 0, 255), -1)
             cv2.putText(frame, str(idx), (x + 6, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         connections = mp.tasks.vision.HandLandmarksConnections.HAND_CONNECTIONS
         for connection in connections:
@@ -334,7 +345,7 @@ while True:
             end = hand[connection.end]
             x1, y1 = int(start.x*w), int(start.y*h)
             x2, y2 = int(end.x * w), int(end.y * h)
-            cv2.line(frame, (x1, y1), (x2, y2), (0, 0, 255), 4)
+            cv2.line(frame, (x1, y1), (x2, y2), (0, 0, 255), line_width)
 
     face_results = face_landmarker.detect(mp_image)
 
@@ -364,17 +375,24 @@ while True:
 
             left_to_bottom = abs(left_corner_y - lip_bottom_y)
             right_to_bottom = abs(right_corner_y - lip_bottom_y)
+            print(
+                f"mouth_width={mouth_width:.1f}, "
+                f"mouth_open={mouth_open:.1f}, "
+                f"purse_hand_ok={purse_hand_ok}, "
+                f"left_to_top={left_to_top:.1f}, "
+                f"left_to_bottom={left_to_bottom:.1f}"
+            )
             if left_to_top > left_to_bottom and right_to_top > right_to_bottom and mouth_open > 40:
                 expression = "scream"
             elif is_smirk(face, w, h):
                 expression = "smirk"
             elif left_to_top < left_to_bottom and right_to_top < right_to_bottom and mouth_open > 40:
                 expression = "open"
-            elif mouth_width > 120:
+            elif mouth_width > 90:
                 expression = "smile"
-            elif mouth_width <= 90 and purse_hand_ok:
+            elif mouth_width <= 60 and purse_hand_ok:
                 expression = "purse"
-            elif mouth_width <= 90 and not purse_hand_ok:
+            elif mouth_width <= 60 and not purse_hand_ok:
                 expression = "smooch"
             else:
                 expression = "neutral"
@@ -385,7 +403,7 @@ while True:
         for i in FACE_POINTS.values():
             lm = face[i]
             x, y = int(lm.x * w), int(lm.y * h)
-            cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)
+            cv2.circle(frame, (x, y), face_dot_radius, (0, 255, 0), -1)
 
         #Landmark labeling in case face landmarks need to be changed
         # for i, lm in enumerate(face):
