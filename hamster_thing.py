@@ -382,17 +382,17 @@ while True:
                 f"left_to_top={left_to_top:.1f}, "
                 f"left_to_bottom={left_to_bottom:.1f}"
             )
-            if left_to_top > left_to_bottom and right_to_top > right_to_bottom and mouth_open > 40:
+            if left_to_top > left_to_bottom and right_to_top > right_to_bottom and mouth_open > 10:
                 expression = "scream"
             elif is_smirk(face, w, h):
                 expression = "smirk"
-            elif left_to_top < left_to_bottom and right_to_top < right_to_bottom and mouth_open > 40:
+            elif left_to_top < left_to_bottom and right_to_top < right_to_bottom and mouth_open > 10:
                 expression = "open"
-            elif mouth_width > 90:
+            elif mouth_width > 45:
                 expression = "smile"
-            elif mouth_width <= 60 and purse_hand_ok:
+            elif mouth_width <= 30 and purse_hand_ok:
                 expression = "purse"
-            elif mouth_width <= 60 and not purse_hand_ok:
+            elif mouth_width <= 30 and not purse_hand_ok:
                 expression = "smooch"
             else:
                 expression = "neutral"
